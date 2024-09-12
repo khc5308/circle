@@ -1,7 +1,7 @@
 import cv2
 import math
 
-img = cv2.imread("real.png", cv2.IMREAD_COLOR)
+img = cv2.imread("img.png", cv2.IMREAD_COLOR)
 gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
 # 이진화 처리
