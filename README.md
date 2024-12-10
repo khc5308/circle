@@ -5,4 +5,4 @@
 2. main.py를 실행!
 
 이미지 이름 확인
-`img.png` 이여야 함
+`image.png` 이여야 함

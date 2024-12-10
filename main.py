@@ -1,58 +1,80 @@
 import cv2
+import numpy
+import numpy as np
 import math
 
-img = cv2.imread("img.png", cv2.IMREAD_COLOR)
-gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
-# 이진화 처리
-ret, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
-binary = cv2.bitwise_not(binary)
+def load_image(image_path):
+    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    assert img is not None
+    return img
 
-# 외곽선 검출
-contours, hierarchy = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-# 각 contour에 대해 처리
-for i in range(len(contours)):
-    # 외곽선 그리기(red)
-    cv2.drawContours(img, [contours[i]], 0, (0, 0, 255), 2)
+def preprocess_image_1(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    binary = cv2.bitwise_not(binary)
+    return gray, binary
 
-    # 그린 원 넓이
-    extent_of_drawn =  cv2.contourArea(contours[i])
-    print("Contour", i, "넓이:", extent_of_drawn)
 
-    # 원의 중심과 반지름 계산
-    (x, y), r = cv2.minEnclosingCircle(contours[i])
+def preprocess_image_2(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    binary = cv2.bitwise_not(binary)
+    kernel = np.ones((5, 5), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    return gray, binary
+def find_contours(binary):
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return contours
+
+
+def analyze_contour(contour):
+    area = cv2.contourArea(contour)
+    (x, y), radius = cv2.minEnclosingCircle(contour)
     center = (int(x), int(y))
-    r = int(r)
+    radius = int(radius)
+    perfect_circle_area = math.pi * radius * radius
+    circularity = min(area / perfect_circle_area * 100, 100)
+    return center, radius, area, perfect_circle_area, circularity
 
-    # 외접원 그리기(blue)
-    cv2.circle(img, center, r, (0, 255, 0), 2)
 
-    # 외접원의 넓이
-    extent_of_Perfect = math.pi * r * r
-    print("외접원의 넓이:", extent_of_Perfect)
+def draw_results(img, contour, center, radius, circularity):
+    cv2.drawContours(img, [contour], 0, (0, 0, 255), 2)
+    cv2.circle(img, center, radius, (0, 255, 0), 2)
+    cv2.putText(img, f"{circularity:.2f}%", (center[0] - 40, center[1] + 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
-    # 퍼센트 계산
-    persent = round((extent_of_drawn/extent_of_Perfect) * 100, 2)
-    if persent > 100:
-        persent = 100
-    print(f"{persent}%")
-    persent = str(persent) + "%"
 
-    # 텍스트 크기 계산
-    text_size = cv2.getTextSize(persent, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)[0]
-    
-    # 이미지의 크기 얻기
-    img_height, img_width = img.shape[:2]
-    
-    # 텍스트를 화면 하단 중앙에 배치
-    text_x = (img_width - text_size[0]) // 2
-    text_y = img_height - 50  # 하단에서 50px 위에 배치
+def process_image(image):
+    if type(image) != numpy.ndarray: img = load_image(image)
+    else: img = image
 
-    # 텍스트 출력 (하단 중앙)
-    cv2.putText(img, persent, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
-    
-    cv2.imshow("src", img)
-    cv2.waitKey(0)
+    check = False
+    current = 0
 
-cv2.destroyAllWindows()
+    try:
+        _, binary = preprocess_image_1(img)
+        contours = find_contours(binary)
+
+        for contour in contours:
+            center, radius, area, perfect_area, circularity = analyze_contour(contour)
+            draw_results(img, contour, center, radius, circularity)
+            check = True
+            current = circularity
+
+    except:
+        _, binary = preprocess_image_2(img)
+        contours = find_contours(binary)
+        for contour in contours:
+            center, radius, area, perfect_area, circularity = analyze_contour(contour)
+            draw_results(img, contour, center, radius, circularity)
+            check = True
+            current = circularity
+    finally:
+        if check: return current
+        return -1
+# usage : process_image(numpy.ndarray or string(path))
+# plz use try catch syntax
